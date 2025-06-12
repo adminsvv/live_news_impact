@@ -24,6 +24,7 @@ import time as time_module
 from pandas.io.formats.style import Styler
 import warnings
 import streamlit as st
+import streamlit.components.v1 as components
 
 pd.set_option('display.max_columns', None)
 
@@ -452,8 +453,9 @@ if refresh_data:
     </body>
     </html>
     """
+    #
     st.markdown(full_html_code, unsafe_allow_html=True)
-    #st.components.v1.html(full_html_code, height=800, scrolling=True)
+    st.components.v1.html(full_html_code, height=800, scrolling=True)
     #time_module.sleep(60)
 
 
