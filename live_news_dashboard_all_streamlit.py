@@ -454,7 +454,7 @@ if refresh_data:
     </html>
     """
     #
-    st.markdown(full_html_code, unsafe_allow_html=True)
+    #st.markdown(full_html_code, unsafe_allow_html=True)
     st.components.v1.html(full_html_code, height=800, scrolling=True)
     #time_module.sleep(60)
 
