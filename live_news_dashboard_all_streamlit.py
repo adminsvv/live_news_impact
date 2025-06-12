@@ -267,7 +267,7 @@ if refresh_data:
                     <td>{row['dt_tm']}</td>
                 </tr>
                 """)
-        html_table = '\n'.join(rows)
+    html_table = '\n'.join(rows)
 
 
     full_html_code = f"""
