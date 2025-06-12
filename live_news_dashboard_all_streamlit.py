@@ -224,32 +224,50 @@ if refresh_data:
             return 'neutral'
 
     rows = []
-    for _, row in final_df.iterrows():
-        pct_class = row_color(row['pct_change'], row['sentiment'])
-        try:
-            pct_value = float(row['pct_change'])
-            pct_str = f"{pct_value:+.2f}%"
-        except:
-            pct_str = str(row['pct_change'])
-        news_link = row.get('news link', '')
-        if news_link and str(news_link).strip():
-            news_link_html = f'<a href="{news_link}" target="_blank" class="news-link">PDF</a>'
-        else:
-            news_link_html = ''
-        rows.append(f"""
-        <tr>
-            <td>{row['stock']}</td>
-            <td>{news_link_html}</td>
-            <td class="{pct_class}">{pct_str}</td>
-            <td>{row['impact']}</td>
-            <td><span class="impact-score">{row['impact score']}</span></td>
-            <td class="{pct_class}">{row['sentiment']}</td>
-            <td class="summary">{row['short summary']}</td>
-            <td>{row['dt_tm']}</td>
-        </tr>
-        """)
-
-    html_table = '\n'.join(rows)
+    for stock, group in final_df.groupby('stock'):
+        group = group.reset_index(drop=True)
+        rowspan = len(group)
+        for idx, row in group.iterrows():
+            pct_class = row_color(row['pct_change'], row['sentiment'])
+            try:
+                pct_value = float(row['pct_change'])
+                pct_str = f"{pct_value:+.2f}%"
+            except:
+                pct_str = str(row['pct_change'])
+    
+            news_link = row.get('news link', '')
+            if news_link and str(news_link).strip():
+                news_link_html = f'<a href="{news_link}" target="_blank" class="news-link">PDF</a>'
+            else:
+                news_link_html = ''
+    
+            # For the first row, include the stock name with rowspan
+            if idx == 0:
+                rows.append(f"""
+                <tr>
+                    <td rowspan="{rowspan}">{stock}</td>
+                    <td>{news_link_html}</td>
+                    <td class="{pct_class}">{pct_str}</td>
+                    <td>{row['impact']}</td>
+                    <td><span class="impact-score">{row['impact score']}</span></td>
+                    <td class="{pct_class}">{row['sentiment']}</td>
+                    <td class="summary">{row['short summary']}</td>
+                    <td>{row['dt_tm']}</td>
+                </tr>
+                """)
+            else:
+                rows.append(f"""
+                <tr>
+                    <td>{news_link_html}</td>
+                    <td class="{pct_class}">{pct_str}</td>
+                    <td>{row['impact']}</td>
+                    <td><span class="impact-score">{row['impact score']}</span></td>
+                    <td class="{pct_class}">{row['sentiment']}</td>
+                    <td class="summary">{row['short summary']}</td>
+                    <td>{row['dt_tm']}</td>
+                </tr>
+                """)
+        html_table = '\n'.join(rows)
 
 
     full_html_code = f"""
