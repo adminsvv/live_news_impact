@@ -116,21 +116,30 @@ if refresh_data:
         # Convert ObjectId to string for DataFrame
         doc["_id"] = str(doc["_id"])
         return doc
-
+    
     # Apply flattening
-    flat_docs = [flatten_doc(doc) for doc in docs]
+    if docs:
+        flat_docs = [flatten_doc(doc) for doc in docs]
+        df_bse = pd.DataFrame(flat_docs)
 
-    # Create DataFrame
-    df_bse = pd.DataFrame(flat_docs)
-    df_bse.head()
-    df_bse = df_bse.rename(columns={"NSE": "stock"})
-
-    df_bse=df_bse.rename(columns={"pdf_link_live": "news link"})
-    df_bse=df_bse.rename(columns={"shortsummary": "short summary"})
-    df_bse=df_bse.rename(columns={"impactscore": "impact score"})
-
-    df_bse=df_bse[['stock','news link','impact','impact score','sentiment','short summary','dt_tm']]
-    df_bse.head(2)
+        if not df_bse.empty:
+            df_bse = df_bse.rename(columns={
+                "NSE": "stock",
+                "pdf_link_live": "news link",
+                "shortsummary": "short summary",
+                "impactscore": "impact score"
+            })
+    
+            expected_cols = ['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']
+            # Only keep columns that are present
+            df_bse = df_bse[[col for col in expected_cols if col in df_bse.columns]]
+    
+            print(df_bse.head(2))
+        else:
+            print("⚠️ DataFrame is empty after flattening.")
+    else:
+        expected_cols = ['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']
+        df_bse = pd.DataFrame(columns=expected_cols)
 
 
     # In[13]:
