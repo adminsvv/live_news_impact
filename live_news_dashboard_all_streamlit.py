@@ -218,6 +218,27 @@ if refresh_data:
 
     final_df=final_df.merge(df_merged_all_news,how='left',on='stock')
     final_df.head()
+    final_df['dt_tm'] = pd.to_datetime(final_df['dt_tm'], errors='coerce')
+
+    # Count of distinct stocks
+    distinct_stock_count = final_df['stock'].nunique()
+    
+    # Define time threshold (last 15 minutes from now)
+    time_threshold = datetime.now() - timedelta(minutes=15)
+    
+    # Filter for recent news
+    recent_df = final_df[final_df['dt_tm'] >= time_threshold]
+    
+    # Count of distinct stocks in last 15 minutes
+    recent_stock_count = recent_df['stock'].nunique()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(label="📈 Total Distinct Stocks", value=distinct_stock_count)
+    
+    with col2:
+        st.metric(label="⏱️ Stocks Active in Last 15 Min", value=recent_stock_count)
 
 
 
