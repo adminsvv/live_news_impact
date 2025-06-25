@@ -225,13 +225,15 @@ if refresh_data:
     
     # Define time threshold (last 15 minutes from now)
     time_threshold = datetime.now() - timedelta(minutes=15)
+    st.write(time_threshold)
     
     # Filter for recent news
     recent_df = final_df[final_df['dt_tm'] >= time_threshold]
     
     # Count of distinct stocks in last 15 minutes
+    
     recent_stock_count = recent_df['stock'].nunique()
-
+    
     col1, col2 = st.columns(2)
 
     with col1:
