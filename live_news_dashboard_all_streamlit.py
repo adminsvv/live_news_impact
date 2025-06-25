@@ -224,7 +224,7 @@ if refresh_data:
     distinct_stock_count = final_df['stock'].nunique()
     
     # Define time threshold (last 15 minutes from now)
-    time_threshold = datetime.now() - timedelta(minutes=15)
+    time_threshold = datetime.now() - timedelta(minutes=15) + timedelta(hours=5, minutes=30)
     st.write(time_threshold)
     
     # Filter for recent news
