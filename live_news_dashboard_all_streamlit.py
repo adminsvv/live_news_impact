@@ -80,689 +80,691 @@ if not login_block():
 start_time = dt_time(9, 0)   # 09:00 AM
 end_time = dt_time(15, 45) 
 now = datetime.now().time()
-refresh_data = st.checkbox("Refresh Data")  
 st.title("Live News Dashboard - Stocks with +-3%")
+if st.button('Refresh'):
+    st.rerun()
+  
 ############# news from bse########
-if refresh_data:
-    MONGODB_URI = "mongodb+srv://prachi:Akash5555@stockgpt.fryqpbi.mongodb.net/"
 
-    client_mongo = MongoClient(MONGODB_URI)
-    db = client_mongo["CAG_CHATBOT"]
-    collection_bse_news = db["ProcessedNews"]
-    collection_live_squack=db["news_livesquack"]
+MONGODB_URI = "mongodb+srv://prachi:Akash5555@stockgpt.fryqpbi.mongodb.net/"
 
-    # Query the data
-    # To get all docs, just use: docs = collection.find()
+client_mongo = MongoClient(MONGODB_URI)
+db = client_mongo["CAG_CHATBOT"]
+collection_bse_news = db["ProcessedNews"]
+collection_live_squack=db["news_livesquack"]
 
-    today = datetime.today().date()
+# Query the data
+# To get all docs, just use: docs = collection.find()
 
-    # Yesterday's date
-    yesterday = today - timedelta(days=1)
+today = datetime.today().date()
 
-    dates = [today, yesterday]
-    query = {
-        "$or": [
-            {"dt_tm": {"$regex": f"^{d}"}} for d in dates
-        ]
-    }
-    docs = list(collection_bse_news.find(query))
-    # Flatten nested 'symbolmap' for each document
-    def flatten_doc(doc):
-        symbolmap = doc.pop("symbolmap", {})
-        # Add symbolmap keys to top level with prefix if needed
-        for key, value in symbolmap.items():
-            # If value is dict (e.g., symbolmap itself contains nested dict), flatten further if needed
-            doc[key] = value
-        # Convert ObjectId to string for DataFrame
-        doc["_id"] = str(doc["_id"])
-        return doc
-    
-    # Apply flattening
-    if docs:
-        flat_docs = [flatten_doc(doc) for doc in docs]
-        df_bse = pd.DataFrame(flat_docs)
+# Yesterday's date
+yesterday = today - timedelta(days=1)
 
-        if not df_bse.empty:
-            df_bse = df_bse.rename(columns={
-                "NSE": "stock",
-                "pdf_link_live": "news link",
-                "shortsummary": "short summary",
-                "impactscore": "impact score"
-            })
-    
-            expected_cols = ['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']
-            # Only keep columns that are present
-            df_bse = df_bse[[col for col in expected_cols if col in df_bse.columns]]
-    
-            print(df_bse.head(2))
-        else:
-            print("⚠️ DataFrame is empty after flattening.")
-    else:
+dates = [today, yesterday]
+query = {
+    "$or": [
+        {"dt_tm": {"$regex": f"^{d}"}} for d in dates
+    ]
+}
+docs = list(collection_bse_news.find(query))
+# Flatten nested 'symbolmap' for each document
+def flatten_doc(doc):
+    symbolmap = doc.pop("symbolmap", {})
+    # Add symbolmap keys to top level with prefix if needed
+    for key, value in symbolmap.items():
+        # If value is dict (e.g., symbolmap itself contains nested dict), flatten further if needed
+        doc[key] = value
+    # Convert ObjectId to string for DataFrame
+    doc["_id"] = str(doc["_id"])
+    return doc
+
+# Apply flattening
+if docs:
+    flat_docs = [flatten_doc(doc) for doc in docs]
+    df_bse = pd.DataFrame(flat_docs)
+
+    if not df_bse.empty:
+        df_bse = df_bse.rename(columns={
+            "NSE": "stock",
+            "pdf_link_live": "news link",
+            "shortsummary": "short summary",
+            "impactscore": "impact score"
+        })
+
         expected_cols = ['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']
-        df_bse = pd.DataFrame(columns=expected_cols)
+        # Only keep columns that are present
+        df_bse = df_bse[[col for col in expected_cols if col in df_bse.columns]]
+
+        print(df_bse.head(2))
+    else:
+        print("⚠️ DataFrame is empty after flattening.")
+else:
+    expected_cols = ['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']
+    df_bse = pd.DataFrame(columns=expected_cols)
 
 
-    # In[13]:
+# In[13]:
 
 
-    #########news from livesqack
+#########news from livesqack
 
-    docs_livesquack = list(collection_live_squack.find(query))
-    flat_docs_livesquack = [flatten_doc(doc) for doc in docs_livesquack]
+docs_livesquack = list(collection_live_squack.find(query))
+flat_docs_livesquack = [flatten_doc(doc) for doc in docs_livesquack]
 
-    # Create DataFrame
-    df_livesquack= pd.DataFrame(flat_docs_livesquack)
-    df_livesquack.head()
-    df_livesquack=df_livesquack.rename(columns={"nse_symbol": "stock"})
-    df_livesquack['news link']=""
-    df_livesquack=df_livesquack[['stock','news link','impact','impact score','sentiment','short summary','dt_tm']]
-    df_livesquack.head(2)
-
-
-    # In[14]:
+# Create DataFrame
+df_livesquack= pd.DataFrame(flat_docs_livesquack)
+df_livesquack.head()
+df_livesquack=df_livesquack.rename(columns={"nse_symbol": "stock"})
+df_livesquack['news link']=""
+df_livesquack=df_livesquack[['stock','news link','impact','impact score','sentiment','short summary','dt_tm']]
+df_livesquack.head(2)
 
 
-    df_merged_all_news = pd.concat([df_livesquack, df_bse], ignore_index=True)
-
-    df_merged_all_news.head()
+# In[14]:
 
 
-    # In[17]:
+df_merged_all_news = pd.concat([df_livesquack, df_bse], ignore_index=True)
+
+df_merged_all_news.head()
 
 
-    df_merged_all_news['stock'].nunique()
+# In[17]:
 
 
-    # In[18]:
+df_merged_all_news['stock'].nunique()
 
 
-    # get yahoo data for the news stocks
+# In[18]:
 
 
-
-    tickers = [f"{s}.NS" for s in df_merged_all_news['stock'].unique()]
-    data = yf.download(
-        tickers=tickers,
-        period="2d",
-        interval="1d",
-        auto_adjust=True,
-        progress=False
-    )
-
-    data= data.unstack(level=0)
-    data = data.unstack(level=0)
-    data = data.reset_index()
-    data.head(2)
-
-
-    # In[20]:
-
-
-    data = data.sort_values(['Ticker', 'Date'])
-
-    # Calculate pct_change for Close by ticker
-    data['pct_change'] = data.groupby('Ticker')['Close'].pct_change() * 100
-
-    # Keep only the last row per ticker (i.e., today's close and pct change from yesterday)
-    latest = data.groupby('Ticker').tail(1).reset_index(drop=True)
-    latest['stock'] = latest['Ticker'].str.replace('.NS', '')
-    final_df = latest[['stock', 'Close', 'pct_change']]
-    final_df=final_df[(final_df['pct_change'] < -3) | (final_df['pct_change'] > 3)]
-    final_df.head(20)
-
-
-    # In[21]:
-
-
-    ############ merge news and stocks data
-
-    final_df=final_df.merge(df_merged_all_news,how='left',on='stock')
-    final_df.head()
-    final_df['dt_tm'] = pd.to_datetime(final_df['dt_tm'], errors='coerce')
-
-    # Count of distinct stocks
-    distinct_stock_count = final_df['stock'].nunique()
-    
-    # Define time threshold (last 15 minutes from now)
-    time_threshold = datetime.now() - timedelta(minutes=15) + timedelta(hours=5, minutes=30)
-    st.write(time_threshold)
-    
-    # Filter for recent news
-    recent_df = final_df[final_df['dt_tm'] >= time_threshold]
-    
-    # Count of distinct stocks in last 15 minutes
-    
-    recent_stock_count = recent_df['stock'].nunique()
-    
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.metric(label="📈 Total Distinct Stocks", value=distinct_stock_count)
-    
-    with col2:
-        st.metric(label="⏱️ Stocks Active in Last 15 Min", value=recent_stock_count)
+# get yahoo data for the news stocks
 
 
 
+tickers = [f"{s}.NS" for s in df_merged_all_news['stock'].unique()]
+data = yf.download(
+    tickers=tickers,
+    period="2d",
+    interval="1d",
+    auto_adjust=True,
+    progress=False
+)
 
-    # def row_color(pct, sentiment):
-    #     if isinstance(sentiment, str):
-    #         sentiment = sentiment.lower()
-    #     if sentiment == 'positive':
-    #         return 'positive'
-    #     elif sentiment == 'negative':
-    #         return 'negative'
-    #     else:
-    #         return 'neutral'
+data= data.unstack(level=0)
+data = data.unstack(level=0)
+data = data.reset_index()
+data.head(2)
 
-    # rows = []
-    # for _, row in final_df.iterrows():
-    #     pct_class = row_color(row['pct_change'], row['sentiment'])
-    #     try:
-    #         pct_value = float(row['pct_change'])
-    #         pct_str = f"{pct_value:+.2f}%"
-    #     except:
-    #         pct_str = str(row['pct_change'])
-    
-    #     news_link = row.get('news link', '')
-    #     if news_link and str(news_link).strip():
-    #         news_link_html = f'<a href="{news_link}" target="_blank" class="news-link">PDF</a>'
-    #     else:
-    #         news_link_html = ''
-    
-    #     rows.append(f"""
-    #     <tr>
-    #         <td>{row['stock']}</td>
-    #         <td>{news_link_html}</td>
-    #         <td class="{pct_class}">{pct_str}</td>
-    #         <td>{row['impact']}</td>
-    #         <td><span class="impact-score">{row['impact score']}</span></td>
-    #         <td class="{pct_class}">{row['sentiment']}</td>
-    #         <td class="summary">{row['short summary']}</td>
-    #         <td>{row['dt_tm']}</td>
-    #     </tr>
-    #     """)
-    # html_table = '\n'.join(rows)
-    
 
-    # full_html_code = f"""
-    # <!DOCTYPE html>
-    # <html lang="en">
-    # <head>
-    #     <meta charset="UTF-8">
-    #     <title>Stock News Impact Dashboard</title>
-    #     <style>
-    #         thead th {{
-    #             position: sticky;
-    #             top: 0;
-    #             background: #e7eef7;
-    #             z-index: 2;
-    #         }}
-    #         body {{
-    #             font-family: 'Segoe UI', Arial, sans-serif;
-    #             background: #f7f8fa;
-    #             margin: 0;
-    #             padding: 0;
-    #         }}
-    #         .container {{
-    #             max-width: 1200px;
-    #             margin: 40px auto;
-    #             background: #fff;
-    #             border-radius: 16px;
-    #             box-shadow: 0 2px 8px rgba(60,60,60,0.11);
-    #             padding: 30px;
-    #         }}
-    #         h2 {{
-    #             margin-bottom: 24px;
-    #             color: #26313e;
-    #             letter-spacing: 1px;
-    #         }}
-    #         .table-scroll {{
-    #             overflow-x: auto;
-    #             max-height: 600px;
-    #             border-radius: 10px;
-    #         }}
-    #         table {{
-    #             border-collapse: collapse;
-    #             min-width: 1100px;
-    #             width: 100%;
-    #             background: #fff;
-    #         }}
-    #         th, td {{
-    #             text-align: left;
-    #             padding: 12px 14px;
-    #             border-bottom: 1px solid #ececec;
-    #             vertical-align: top;
-    #         }}
-    #         th {{
-    #             background: #e7eef7;
-    #             font-weight: 600;
-    #             cursor: pointer;
-    #             user-select: none;
-    #         }}
-    #         tr:hover {{
-    #             background: #f5faff;
-    #         }}
-    #         .positive {{
-    #             color: #15af4c;
-    #             font-weight: bold;
-    #         }}
-    #         .negative {{
-    #             color: #e03b3b;
-    #             font-weight: bold;
-    #         }}
-    #         .neutral {{
-    #             color: #666;
-    #             font-weight: bold;
-    #         }}
-    #         .impact-score {{
-    #             background: #f3f3f3;
-    #             padding: 4px 10px;
-    #             border-radius: 8px;
-    #             font-size: 1em;
-    #             display: inline-block;
-    #         }}
-    #         .summary {{
-    #             max-width: 420px;
-    #             overflow-x: auto;
-    #             white-space: pre-line;
-    #             font-size: 1em;
-    #             color: #384357;
-    #         }}
-    #         .news-link {{
-    #             color: #0069c2;
-    #             text-decoration: none;
-    #             word-break: break-all;
-    #         }}
-    #         .news-link:hover {{
-    #             text-decoration: underline;
-    #         }}
-    #         th.sort-asc::after {{
-    #             content: " ▲";
-    #             font-size: 1em;
-    #             color: #26313e;
-    #         }}
-    #         th.sort-desc::after {{
-    #             content: " ▼";
-    #             font-size: 1em;
-    #             color: #26313e;
-    #         }}
-    #         @media (max-width: 600px) {{
-    #             .container {{
-    #                 padding: 7px;
-    #             }}
-    #             .summary {{
-    #                 max-width: 170px;
-    #             }}
-    #         }}
-    #     </style>
-    # </head>
-    # <body>
-    # <div class="container">
-    #     <h2>Stock News Impact Dashboard</h2>
-    #     <div class="table-scroll">
-    #         <table id="impact-table">
-    #             <thead>
-    #                 <tr>
-    #                     <th>Stock</th>
-    #                     <th>News Link</th>
-    #                     <th>% Change</th>
-    #                     <th>Impact</th>
-    #                     <th>Impact Score</th>
-    #                     <th>Sentiment</th>
-    #                     <th>Summary</th>
-    #                     <th>Date/Time</th>
-    #                 </tr>
-    #             </thead>
-    #             <tbody>
-    #                 {html_table}
-    #             </tbody>
-    #         </table>
-    #     </div>
-    # </div>
-    # <script>
-    # document.addEventListener('DOMContentLoaded', function() {{
-    #     const table = document.getElementById('impact-table');
-    #     let lastSortedCol = null;
-    #     let lastSortAsc = true;
+# In[20]:
 
-    #     function getCellValue(tr, idx) {{
-    #         const cell = tr.children[idx];
-    #         if (cell.querySelector('a')) {{
-    #             return cell.querySelector('a').textContent.trim();
-    #         }}
-    #         return cell.textContent.trim();
-    #     }}
 
-    #     function comparer(idx, asc, type) {{
-    #         return function(a, b) {{
-    #             let v1 = getCellValue(asc ? a : b, idx);
-    #             let v2 = getCellValue(asc ? b : a, idx);
-    #             if (type === 'number') {{
-    #                 v1 = parseFloat(v1.replace(/[^\d\.\-]+/g, '')) || 0;
-    #                 v2 = parseFloat(v2.replace(/[^\d\.\-]+/g, '')) || 0;
-    #             }} else if (type === 'date') {{
-    #                 v1 = Date.parse(v1) || 0;
-    #                 v2 = Date.parse(v2) || 0;
-    #             }} else {{
-    #                 v1 = v1.toLowerCase();
-    #                 v2 = v2.toLowerCase();
-    #             }}
-    #             return v1 > v2 ? 1 : v1 < v2 ? -1 : 0;
-    #         }}
-    #     }}
+data = data.sort_values(['Ticker', 'Date'])
 
-    #     Array.from(table.querySelectorAll('th')).forEach(function(th, idx) {{
-    #         th.addEventListener('click', function() {{
-    #             // Remove all sort indicators
-    #             table.querySelectorAll('th').forEach(header => {{
-    #                 header.classList.remove('sort-asc', 'sort-desc');
-    #             }});
+# Calculate pct_change for Close by ticker
+data['pct_change'] = data.groupby('Ticker')['Close'].pct_change() * 100
 
-    #             // Decide the new direction
-    #             let asc = true;
-    #             if (lastSortedCol === idx) {{
-    #                 asc = !lastSortAsc;
-    #             }}
-    #             lastSortedCol = idx;
-    #             lastSortAsc = asc;
-    #             th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+# Keep only the last row per ticker (i.e., today's close and pct change from yesterday)
+latest = data.groupby('Ticker').tail(1).reset_index(drop=True)
+latest['stock'] = latest['Ticker'].str.replace('.NS', '')
+final_df = latest[['stock', 'Close', 'pct_change']]
+final_df=final_df[(final_df['pct_change'] < -3) | (final_df['pct_change'] > 3)]
+final_df.head(20)
 
-    #             // Choose sorting type
-    #             let type = 'string';
-    #             if (idx === 2 || idx === 4) type = 'number'; // % Change, Impact Score
-    #             if (idx === 7) type = 'date'; // Date/Time
 
-    #             const tbody = table.tBodies[0];
-    #             // Sort and reattach rows
-    #             Array.from(tbody.querySelectorAll('tr'))
-    #                 .sort(comparer(idx, asc, type))
-    #                 .forEach(tr => tbody.appendChild(tr));
-    #         }});
-    #     }});
-    # }});
-    # </script>
+# In[21]:
 
-    # </body>
-    # </html>
-    # """
-    # #
-    # #st.markdown(full_html_code, unsafe_allow_html=True)
-    # st.components.v1.html(full_html_code, height=800, scrolling=True)
+
+############ merge news and stocks data
+
+final_df=final_df.merge(df_merged_all_news,how='left',on='stock')
+final_df.head()
+final_df['dt_tm'] = pd.to_datetime(final_df['dt_tm'], errors='coerce')
+
+# Count of distinct stocks
+distinct_stock_count = final_df['stock'].nunique()
+
+# Define time threshold (last 15 minutes from now)
+time_threshold = datetime.now() - timedelta(minutes=15) + timedelta(hours=5, minutes=30)
+st.write(time_threshold)
+
+# Filter for recent news
+recent_df = final_df[final_df['dt_tm'] >= time_threshold]
+
+# Count of distinct stocks in last 15 minutes
+
+recent_stock_count = recent_df['stock'].nunique()
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.metric(label="📈 Total Distinct Stocks", value=distinct_stock_count)
+
+with col2:
+    st.metric(label="⏱️ Stocks Active in Last 15 Min", value=recent_stock_count)
 
 
 
 
-    def row_color(pct, sentiment):
-        if isinstance(sentiment, str):
-            sentiment = sentiment.lower()
-        if sentiment == 'positive':
-            return 'positive'
-        elif sentiment == 'negative':
-            return 'negative'
-        else:
-            return 'neutral'
-    
-    rows = []
-    for _, row in final_df.iterrows():
-        pct_class = row_color(row['pct_change'], row['sentiment'])
-        try:
-            pct_value = float(row['pct_change'])
-            pct_str = f"{pct_value:+.2f}%"
-        except:
-            pct_str = str(row['pct_change'])
-    
-        news_link = row.get('news link', '')
-        if news_link and str(news_link).strip():
-            news_link_html = f'<a href="{news_link}" target="_blank" class="news-link">PDF</a>'
-        else:
-            news_link_html = ''
-    
-        rows.append(f"""
-        <tr>
-            <td>{row['stock']}</td>
-            <td>{news_link_html}</td>
-            <td class="{pct_class}">{pct_str}</td>
-            <td>{row['impact']}</td>
-            <td><span class="impact-score">{row['impact score']}</span></td>
-            <td class="{pct_class}">{row['sentiment']}</td>
-            <td class="summary">{row['short summary']}</td>
-            <td>{row['dt_tm']}</td>
-        </tr>
-        """)
-    
-    html_table = '\n'.join(rows)
-    
-    full_html_code = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Stock News Impact Dashboard</title>
-        <style>
-            thead th {{
-                position: sticky;
-                top: 0;
-                background: #e7eef7;
-                z-index: 2;
-            }}
-            body {{
-                font-family: 'Segoe UI', Arial, sans-serif;
-                background: #f7f8fa;
-                margin: 0;
-                padding: 0;
-            }}
+# def row_color(pct, sentiment):
+#     if isinstance(sentiment, str):
+#         sentiment = sentiment.lower()
+#     if sentiment == 'positive':
+#         return 'positive'
+#     elif sentiment == 'negative':
+#         return 'negative'
+#     else:
+#         return 'neutral'
+
+# rows = []
+# for _, row in final_df.iterrows():
+#     pct_class = row_color(row['pct_change'], row['sentiment'])
+#     try:
+#         pct_value = float(row['pct_change'])
+#         pct_str = f"{pct_value:+.2f}%"
+#     except:
+#         pct_str = str(row['pct_change'])
+
+#     news_link = row.get('news link', '')
+#     if news_link and str(news_link).strip():
+#         news_link_html = f'<a href="{news_link}" target="_blank" class="news-link">PDF</a>'
+#     else:
+#         news_link_html = ''
+
+#     rows.append(f"""
+#     <tr>
+#         <td>{row['stock']}</td>
+#         <td>{news_link_html}</td>
+#         <td class="{pct_class}">{pct_str}</td>
+#         <td>{row['impact']}</td>
+#         <td><span class="impact-score">{row['impact score']}</span></td>
+#         <td class="{pct_class}">{row['sentiment']}</td>
+#         <td class="summary">{row['short summary']}</td>
+#         <td>{row['dt_tm']}</td>
+#     </tr>
+#     """)
+# html_table = '\n'.join(rows)
+
+
+# full_html_code = f"""
+# <!DOCTYPE html>
+# <html lang="en">
+# <head>
+#     <meta charset="UTF-8">
+#     <title>Stock News Impact Dashboard</title>
+#     <style>
+#         thead th {{
+#             position: sticky;
+#             top: 0;
+#             background: #e7eef7;
+#             z-index: 2;
+#         }}
+#         body {{
+#             font-family: 'Segoe UI', Arial, sans-serif;
+#             background: #f7f8fa;
+#             margin: 0;
+#             padding: 0;
+#         }}
+#         .container {{
+#             max-width: 1200px;
+#             margin: 40px auto;
+#             background: #fff;
+#             border-radius: 16px;
+#             box-shadow: 0 2px 8px rgba(60,60,60,0.11);
+#             padding: 30px;
+#         }}
+#         h2 {{
+#             margin-bottom: 24px;
+#             color: #26313e;
+#             letter-spacing: 1px;
+#         }}
+#         .table-scroll {{
+#             overflow-x: auto;
+#             max-height: 600px;
+#             border-radius: 10px;
+#         }}
+#         table {{
+#             border-collapse: collapse;
+#             min-width: 1100px;
+#             width: 100%;
+#             background: #fff;
+#         }}
+#         th, td {{
+#             text-align: left;
+#             padding: 12px 14px;
+#             border-bottom: 1px solid #ececec;
+#             vertical-align: top;
+#         }}
+#         th {{
+#             background: #e7eef7;
+#             font-weight: 600;
+#             cursor: pointer;
+#             user-select: none;
+#         }}
+#         tr:hover {{
+#             background: #f5faff;
+#         }}
+#         .positive {{
+#             color: #15af4c;
+#             font-weight: bold;
+#         }}
+#         .negative {{
+#             color: #e03b3b;
+#             font-weight: bold;
+#         }}
+#         .neutral {{
+#             color: #666;
+#             font-weight: bold;
+#         }}
+#         .impact-score {{
+#             background: #f3f3f3;
+#             padding: 4px 10px;
+#             border-radius: 8px;
+#             font-size: 1em;
+#             display: inline-block;
+#         }}
+#         .summary {{
+#             max-width: 420px;
+#             overflow-x: auto;
+#             white-space: pre-line;
+#             font-size: 1em;
+#             color: #384357;
+#         }}
+#         .news-link {{
+#             color: #0069c2;
+#             text-decoration: none;
+#             word-break: break-all;
+#         }}
+#         .news-link:hover {{
+#             text-decoration: underline;
+#         }}
+#         th.sort-asc::after {{
+#             content: " ▲";
+#             font-size: 1em;
+#             color: #26313e;
+#         }}
+#         th.sort-desc::after {{
+#             content: " ▼";
+#             font-size: 1em;
+#             color: #26313e;
+#         }}
+#         @media (max-width: 600px) {{
+#             .container {{
+#                 padding: 7px;
+#             }}
+#             .summary {{
+#                 max-width: 170px;
+#             }}
+#         }}
+#     </style>
+# </head>
+# <body>
+# <div class="container">
+#     <h2>Stock News Impact Dashboard</h2>
+#     <div class="table-scroll">
+#         <table id="impact-table">
+#             <thead>
+#                 <tr>
+#                     <th>Stock</th>
+#                     <th>News Link</th>
+#                     <th>% Change</th>
+#                     <th>Impact</th>
+#                     <th>Impact Score</th>
+#                     <th>Sentiment</th>
+#                     <th>Summary</th>
+#                     <th>Date/Time</th>
+#                 </tr>
+#             </thead>
+#             <tbody>
+#                 {html_table}
+#             </tbody>
+#         </table>
+#     </div>
+# </div>
+# <script>
+# document.addEventListener('DOMContentLoaded', function() {{
+#     const table = document.getElementById('impact-table');
+#     let lastSortedCol = null;
+#     let lastSortAsc = true;
+
+#     function getCellValue(tr, idx) {{
+#         const cell = tr.children[idx];
+#         if (cell.querySelector('a')) {{
+#             return cell.querySelector('a').textContent.trim();
+#         }}
+#         return cell.textContent.trim();
+#     }}
+
+#     function comparer(idx, asc, type) {{
+#         return function(a, b) {{
+#             let v1 = getCellValue(asc ? a : b, idx);
+#             let v2 = getCellValue(asc ? b : a, idx);
+#             if (type === 'number') {{
+#                 v1 = parseFloat(v1.replace(/[^\d\.\-]+/g, '')) || 0;
+#                 v2 = parseFloat(v2.replace(/[^\d\.\-]+/g, '')) || 0;
+#             }} else if (type === 'date') {{
+#                 v1 = Date.parse(v1) || 0;
+#                 v2 = Date.parse(v2) || 0;
+#             }} else {{
+#                 v1 = v1.toLowerCase();
+#                 v2 = v2.toLowerCase();
+#             }}
+#             return v1 > v2 ? 1 : v1 < v2 ? -1 : 0;
+#         }}
+#     }}
+
+#     Array.from(table.querySelectorAll('th')).forEach(function(th, idx) {{
+#         th.addEventListener('click', function() {{
+#             // Remove all sort indicators
+#             table.querySelectorAll('th').forEach(header => {{
+#                 header.classList.remove('sort-asc', 'sort-desc');
+#             }});
+
+#             // Decide the new direction
+#             let asc = true;
+#             if (lastSortedCol === idx) {{
+#                 asc = !lastSortAsc;
+#             }}
+#             lastSortedCol = idx;
+#             lastSortAsc = asc;
+#             th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+
+#             // Choose sorting type
+#             let type = 'string';
+#             if (idx === 2 || idx === 4) type = 'number'; // % Change, Impact Score
+#             if (idx === 7) type = 'date'; // Date/Time
+
+#             const tbody = table.tBodies[0];
+#             // Sort and reattach rows
+#             Array.from(tbody.querySelectorAll('tr'))
+#                 .sort(comparer(idx, asc, type))
+#                 .forEach(tr => tbody.appendChild(tr));
+#         }});
+#     }});
+# }});
+# </script>
+
+# </body>
+# </html>
+# """
+# #
+# #st.markdown(full_html_code, unsafe_allow_html=True)
+# st.components.v1.html(full_html_code, height=800, scrolling=True)
+
+
+
+
+def row_color(pct, sentiment):
+    if isinstance(sentiment, str):
+        sentiment = sentiment.lower()
+    if sentiment == 'positive':
+        return 'positive'
+    elif sentiment == 'negative':
+        return 'negative'
+    else:
+        return 'neutral'
+
+rows = []
+for _, row in final_df.iterrows():
+    pct_class = row_color(row['pct_change'], row['sentiment'])
+    try:
+        pct_value = float(row['pct_change'])
+        pct_str = f"{pct_value:+.2f}%"
+    except:
+        pct_str = str(row['pct_change'])
+
+    news_link = row.get('news link', '')
+    if news_link and str(news_link).strip():
+        news_link_html = f'<a href="{news_link}" target="_blank" class="news-link">PDF</a>'
+    else:
+        news_link_html = ''
+
+    rows.append(f"""
+    <tr>
+        <td>{row['stock']}</td>
+        <td>{news_link_html}</td>
+        <td class="{pct_class}">{pct_str}</td>
+        <td>{row['impact']}</td>
+        <td><span class="impact-score">{row['impact score']}</span></td>
+        <td class="{pct_class}">{row['sentiment']}</td>
+        <td class="summary">{row['short summary']}</td>
+        <td>{row['dt_tm']}</td>
+    </tr>
+    """)
+
+html_table = '\n'.join(rows)
+
+full_html_code = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Stock News Impact Dashboard</title>
+    <style>
+        thead th {{
+            position: sticky;
+            top: 0;
+            background: #e7eef7;
+            z-index: 2;
+        }}
+        body {{
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f7f8fa;
+            margin: 0;
+            padding: 0;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(60,60,60,0.11);
+            padding: 30px;
+        }}
+        h2 {{
+            margin-bottom: 24px;
+            color: #26313e;
+            letter-spacing: 1px;
+        }}
+        .search-bar {{
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: flex-start;
+            gap: 10px;
+        }}
+        .search-bar input {{
+            padding: 8px 12px;
+            width: 200px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }}
+        .table-scroll {{
+            overflow-x: auto;
+            max-height: 600px;
+            border-radius: 10px;
+        }}
+        table {{
+            border-collapse: collapse;
+            min-width: 1100px;
+            width: 100%;
+            background: #fff;
+        }}
+        th, td {{
+            text-align: left;
+            padding: 12px 14px;
+            border-bottom: 1px solid #ececec;
+            vertical-align: top;
+        }}
+        th {{
+            background: #e7eef7;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+        }}
+        tr:hover {{
+            background: #f5faff;
+        }}
+        .positive {{
+            color: #15af4c;
+            font-weight: bold;
+        }}
+        .negative {{
+            color: #e03b3b;
+            font-weight: bold;
+        }}
+        .neutral {{
+            color: #666;
+            font-weight: bold;
+        }}
+        .impact-score {{
+            background: #f3f3f3;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 1em;
+            display: inline-block;
+        }}
+        .summary {{
+            max-width: 420px;
+            overflow-x: auto;
+            white-space: pre-line;
+            font-size: 1em;
+            color: #384357;
+        }}
+        .news-link {{
+            color: #0069c2;
+            text-decoration: none;
+            word-break: break-all;
+        }}
+        .news-link:hover {{
+            text-decoration: underline;
+        }}
+        th.sort-asc::after {{
+            content: " ▲";
+            font-size: 1em;
+            color: #26313e;
+        }}
+        th.sort-desc::after {{
+            content: " ▼";
+            font-size: 1em;
+            color: #26313e;
+        }}
+        @media (max-width: 600px) {{
             .container {{
-                max-width: 1200px;
-                margin: 40px auto;
-                background: #fff;
-                border-radius: 16px;
-                box-shadow: 0 2px 8px rgba(60,60,60,0.11);
-                padding: 30px;
-            }}
-            h2 {{
-                margin-bottom: 24px;
-                color: #26313e;
-                letter-spacing: 1px;
-            }}
-            .search-bar {{
-                margin-bottom: 20px;
-                display: flex;
-                justify-content: flex-start;
-                gap: 10px;
-            }}
-            .search-bar input {{
-                padding: 8px 12px;
-                width: 200px;
-                border: 1px solid #ccc;
-                border-radius: 8px;
-            }}
-            .table-scroll {{
-                overflow-x: auto;
-                max-height: 600px;
-                border-radius: 10px;
-            }}
-            table {{
-                border-collapse: collapse;
-                min-width: 1100px;
-                width: 100%;
-                background: #fff;
-            }}
-            th, td {{
-                text-align: left;
-                padding: 12px 14px;
-                border-bottom: 1px solid #ececec;
-                vertical-align: top;
-            }}
-            th {{
-                background: #e7eef7;
-                font-weight: 600;
-                cursor: pointer;
-                user-select: none;
-            }}
-            tr:hover {{
-                background: #f5faff;
-            }}
-            .positive {{
-                color: #15af4c;
-                font-weight: bold;
-            }}
-            .negative {{
-                color: #e03b3b;
-                font-weight: bold;
-            }}
-            .neutral {{
-                color: #666;
-                font-weight: bold;
-            }}
-            .impact-score {{
-                background: #f3f3f3;
-                padding: 4px 10px;
-                border-radius: 8px;
-                font-size: 1em;
-                display: inline-block;
+                padding: 7px;
             }}
             .summary {{
-                max-width: 420px;
-                overflow-x: auto;
-                white-space: pre-line;
-                font-size: 1em;
-                color: #384357;
+                max-width: 170px;
             }}
-            .news-link {{
-                color: #0069c2;
-                text-decoration: none;
-                word-break: break-all;
-            }}
-            .news-link:hover {{
-                text-decoration: underline;
-            }}
-            th.sort-asc::after {{
-                content: " ▲";
-                font-size: 1em;
-                color: #26313e;
-            }}
-            th.sort-desc::after {{
-                content: " ▼";
-                font-size: 1em;
-                color: #26313e;
-            }}
-            @media (max-width: 600px) {{
-                .container {{
-                    padding: 7px;
-                }}
-                .summary {{
-                    max-width: 170px;
-                }}
-            }}
-        </style>
-    </head>
-    <body>
-    <div class="container">
-        <h2>Stock News Impact Dashboard</h2>
-    
-        <div class="search-bar">
-            <input type="text" id="stock-search" placeholder="Search stock...">
-        </div>
-    
-        <div class="table-scroll">
-            <table id="impact-table">
-                <thead>
-                    <tr>
-                        <th>Stock</th>
-                        <th>News Link</th>
-                        <th>% Change</th>
-                        <th>Impact</th>
-                        <th>Impact Score</th>
-                        <th>Sentiment</th>
-                        <th>Summary</th>
-                        <th>Date/Time</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {html_table}
-                </tbody>
-            </table>
-        </div>
+        }}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Stock News Impact Dashboard</h2>
+
+    <div class="search-bar">
+        <input type="text" id="stock-search" placeholder="Search stock...">
     </div>
-    
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {{
-        const table = document.getElementById('impact-table');
-        const searchInput = document.getElementById('stock-search');
-    
-        // Live stock name search
-        searchInput.addEventListener('keyup', function() {{
-            const filter = this.value.toLowerCase();
-            const rows = table.querySelectorAll('tbody tr');
-    
-            rows.forEach(row => {{
-                const stockCell = row.children[0];
-                const stockText = stockCell.textContent.toLowerCase();
-                row.style.display = stockText.includes(filter) ? '' : 'none';
-            }});
-        }});
-    
-        // Sorting
-        let lastSortedCol = null;
-        let lastSortAsc = true;
-    
-        function getCellValue(tr, idx) {{
-            const cell = tr.children[idx];
-            if (cell.querySelector('a')) {{
-                return cell.querySelector('a').textContent.trim();
-            }}
-            return cell.textContent.trim();
-        }}
-    
-        function comparer(idx, asc, type) {{
-            return function(a, b) {{
-                let v1 = getCellValue(asc ? a : b, idx);
-                let v2 = getCellValue(asc ? b : a, idx);
-                if (type === 'number') {{
-                    v1 = parseFloat(v1.replace(/[^\d\.\-]+/g, '')) || 0;
-                    v2 = parseFloat(v2.replace(/[^\d\.\-]+/g, '')) || 0;
-                }} else if (type === 'date') {{
-                    v1 = Date.parse(v1) || 0;
-                    v2 = Date.parse(v2) || 0;
-                }} else {{
-                    v1 = v1.toLowerCase();
-                    v2 = v2.toLowerCase();
-                }}
-                return v1 > v2 ? 1 : v1 < v2 ? -1 : 0;
-            }}
-        }}
-    
-        Array.from(table.querySelectorAll('th')).forEach(function(th, idx) {{
-            th.addEventListener('click', function() {{
-                table.querySelectorAll('th').forEach(header => {{
-                    header.classList.remove('sort-asc', 'sort-desc');
-                }});
-    
-                let asc = true;
-                if (lastSortedCol === idx) {{
-                    asc = !lastSortAsc;
-                }}
-                lastSortedCol = idx;
-                lastSortAsc = asc;
-                th.classList.add(asc ? 'sort-asc' : 'sort-desc');
-    
-                let type = 'string';
-                if (idx === 2 || idx === 4) type = 'number';
-                if (idx === 7) type = 'date';
-    
-                const tbody = table.tBodies[0];
-                Array.from(tbody.querySelectorAll('tr'))
-                    .sort(comparer(idx, asc, type))
-                    .forEach(tr => tbody.appendChild(tr));
-            }});
+
+    <div class="table-scroll">
+        <table id="impact-table">
+            <thead>
+                <tr>
+                    <th>Stock</th>
+                    <th>News Link</th>
+                    <th>% Change</th>
+                    <th>Impact</th>
+                    <th>Impact Score</th>
+                    <th>Sentiment</th>
+                    <th>Summary</th>
+                    <th>Date/Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {html_table}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {{
+    const table = document.getElementById('impact-table');
+    const searchInput = document.getElementById('stock-search');
+
+    // Live stock name search
+    searchInput.addEventListener('keyup', function() {{
+        const filter = this.value.toLowerCase();
+        const rows = table.querySelectorAll('tbody tr');
+
+        rows.forEach(row => {{
+            const stockCell = row.children[0];
+            const stockText = stockCell.textContent.toLowerCase();
+            row.style.display = stockText.includes(filter) ? '' : 'none';
         }});
     }});
-    </script>
 
-    </body>
-    </html>
-    """
+    // Sorting
+    let lastSortedCol = null;
+    let lastSortAsc = true;
+
+    function getCellValue(tr, idx) {{
+        const cell = tr.children[idx];
+        if (cell.querySelector('a')) {{
+            return cell.querySelector('a').textContent.trim();
+        }}
+        return cell.textContent.trim();
+    }}
+
+    function comparer(idx, asc, type) {{
+        return function(a, b) {{
+            let v1 = getCellValue(asc ? a : b, idx);
+            let v2 = getCellValue(asc ? b : a, idx);
+            if (type === 'number') {{
+                v1 = parseFloat(v1.replace(/[^\d\.\-]+/g, '')) || 0;
+                v2 = parseFloat(v2.replace(/[^\d\.\-]+/g, '')) || 0;
+            }} else if (type === 'date') {{
+                v1 = Date.parse(v1) || 0;
+                v2 = Date.parse(v2) || 0;
+            }} else {{
+                v1 = v1.toLowerCase();
+                v2 = v2.toLowerCase();
+            }}
+            return v1 > v2 ? 1 : v1 < v2 ? -1 : 0;
+        }}
+    }}
+
+    Array.from(table.querySelectorAll('th')).forEach(function(th, idx) {{
+        th.addEventListener('click', function() {{
+            table.querySelectorAll('th').forEach(header => {{
+                header.classList.remove('sort-asc', 'sort-desc');
+            }});
+
+            let asc = true;
+            if (lastSortedCol === idx) {{
+                asc = !lastSortAsc;
+            }}
+            lastSortedCol = idx;
+            lastSortAsc = asc;
+            th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+
+            let type = 'string';
+            if (idx === 2 || idx === 4) type = 'number';
+            if (idx === 7) type = 'date';
+
+            const tbody = table.tBodies[0];
+            Array.from(tbody.querySelectorAll('tr'))
+                .sort(comparer(idx, asc, type))
+                .forEach(tr => tbody.appendChild(tr));
+        }});
+    }});
+}});
+</script>
+
+</body>
+</html>
+"""
 
 st.components.v1.html(full_html_code, height=800, scrolling=True)
 
