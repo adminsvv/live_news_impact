@@ -81,8 +81,8 @@ start_time = dt_time(9, 0)   # 09:00 AM
 end_time = dt_time(15, 45) 
 now = datetime.now().time()
 st.title("Live News Dashboard - Stocks with +-3%")
-if st.button('Refresh'):
-    st.rerun()
+# if st.button('Refresh'):
+#     st.rerun()
   
 ############# news from bse########
 
