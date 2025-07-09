@@ -3,37 +3,29 @@ import platform
 import re
 import pandas as pd
 import yfinance as yf
-from datetime import datetime, timedelta, date, time as dt_time
+from datetime import datetime, timedelta, time as dt_time
 from pymongo import MongoClient
 import streamlit as st
 import streamlit.components.v1 as components
 import warnings
+pd.options.display.float_format = '{:.2f}'.format
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.max_rows', None)
+warnings.filterwarnings("ignore")
 
 class StockNewsDashboard:
     def __init__(self):
-        # Pandas settings
-        pd.options.display.float_format = '{:.2f}'.format
-        pd.set_option('display.max_columns', None)
-        pd.set_option('display.max_colwidth', None)
-        pd.set_option('display.max_rows', None)
-        warnings.filterwarnings("ignore")
-
-        # Streamlit page config
-        st.set_page_config(
-            layout="wide",
-            page_title="Live News Impact"
-        )
-
-        # Constants
-        self.CREDENTIALS = {
-            "news_impact": "news_ib"
-        }
+        st.set_page_config(layout="wide",page_title="Live News Impact")
+        self.CREDENTIALS = {"news_impact": "news_ib"}
+        self.SYMBOTRON_CREDENTIALS = {"symbotron": "symbotron"}
+        # self.MONGODB_URI = "mongodb+srv://prachi:Akash5555@stockgpt.fryqpbi.mongodb.net/"
         self.MONGODB_URI = st.secrets["mongodb"]["uri"]
-        self.start_time = dt_time(9, 0)  # 09:00 AM
+        self.db = MongoClient(self.MONGODB_URI)["CAG_CHATBOT"]
+        self.start_time = dt_time(9, 0)  
         self.end_time = dt_time(15, 45)
 
     def login_block(self):
-        """Returns True when user is authenticated."""
         if "authenticated" not in st.session_state:
             st.session_state["authenticated"] = False
 
@@ -55,10 +47,8 @@ class StockNewsDashboard:
         return False
 
     def fetch_bse_news(self):
-        client_mongo = MongoClient(self.MONGODB_URI)
-        db = client_mongo["CAG_CHATBOT"]
-        collection_bse_news = db["ProcessedNews"]
-        collection_live_squack = db["news_livesquack"]
+
+        collection_bse_news = self.db["ProcessedNews"]
 
         today = datetime.today().date()
         yesterday = today - timedelta(days=1)
@@ -90,13 +80,10 @@ class StockNewsDashboard:
                 expected_cols = ['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']
                 df_bse = df_bse[[col for col in expected_cols if col in df_bse.columns]]
                 return df_bse
-        expected_cols = ['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']
-        return pd.DataFrame(columns=expected_cols)
+        return pd.DataFrame()
 
     def fetch_livesquack_news(self):
-        client_mongo = MongoClient(self.MONGODB_URI)
-        db = client_mongo["CAG_CHATBOT"]
-        collection_live_squack = db["news_livesquack"]
+        collection_live_squack = self.db["news_livesquack"]
 
         today = datetime.today().date()
         yesterday = today - timedelta(days=1)
@@ -107,16 +94,7 @@ class StockNewsDashboard:
             ]
         }
         docs_livesquack = list(collection_live_squack.find(query))
-
-        def flatten_doc(doc):
-            symbolmap = doc.pop("symbolmap", {})
-            for key, value in symbolmap.items():
-                doc[key] = value
-            doc["_id"] = str(doc["_id"])
-            return doc
-
-        flat_docs_livesquack = [flatten_doc(doc) for doc in docs_livesquack]
-        df_livesquack = pd.DataFrame(flat_docs_livesquack)
+        df_livesquack = pd.DataFrame(docs_livesquack)
         df_livesquack = df_livesquack.rename(columns={"nse_symbol": "stock"})
         df_livesquack['news link'] = ""
         df_livesquack = df_livesquack[['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']]
@@ -124,7 +102,7 @@ class StockNewsDashboard:
 
     def fetch_yahoo_data(self, tickers):
         data = yf.download(
-            tickers=[f"{s}.NS" for s in tickers[:50]],
+            tickers=[f"{s}.NS" for s in tickers],
             period="2d",
             interval="1d",
             auto_adjust=True,
@@ -221,7 +199,7 @@ class StockNewsDashboard:
                 .search-bar input {{
                     padding: 8px 12px;
                     width: 200px;
-                    border: 1px solid #ccc;
+                    border: 1Mb solid #ccc;
                     border-radius: 8px;
                 }}
                 .table-scroll {{
@@ -372,7 +350,7 @@ class StockNewsDashboard:
             Array.from(table.querySelectorAll('th')).forEach(function(th, idx) {{
                 th.addEventListener('click', function() {{
                     table.querySelectorAll('th').forEach(header => {{
-                        header.classList.remove('sort-asc', 'sort-desc');
+                        header.classBList.remove('sort-asc', 'sort-desc');
                     }});
                     let asc = true;
                     if (lastSortedCol === idx) {{
@@ -401,6 +379,14 @@ class StockNewsDashboard:
             st.stop()
 
         st.title("Live News Dashboard - Stocks with +-3%")
+        
+        if 'refresh_data' not in st.session_state:
+            st.session_state['refresh_data'] = False
+
+        if st.button("Refresh Data"):
+            st.session_state['refresh_data'] = True
+            st.rerun()
+
         df_bse = self.fetch_bse_news()
         df_livesquack = self.fetch_livesquack_news()
         df_merged_all_news = pd.concat([df_livesquack, df_bse], ignore_index=True)
@@ -422,6 +408,8 @@ class StockNewsDashboard:
         html_table = self.generate_html_table(final_df)
         full_html_code = self.generate_html(html_table)
         st.components.v1.html(full_html_code, height=800, scrolling=True)
+
+        st.session_state['refresh_data'] = False
 
     def main(self):
         if platform.system() == "Emscripten":
