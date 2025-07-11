@@ -188,9 +188,9 @@ class StockNewsDashboard:
                         cursor: pointer;
                         user-select: none;
                     }}
-                    tr:hover {{
-                        background: #f5faff;
-                    }}
+                    # tr:hover {{
+                    #     background: #f5faff;
+                    # }}
                     .positive {{
                         color: #15af4c;
                         font-weight: bold;
