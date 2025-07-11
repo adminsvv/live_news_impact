@@ -1,29 +1,20 @@
 import asyncio
 import platform
-import re
 import pandas as pd
-import yfinance as yf
-from datetime import datetime, timedelta, time as dt_time
+from datetime import datetime, timedelta
 from pymongo import MongoClient
 import streamlit as st
-import streamlit.components.v1 as components
-import warnings
-pd.options.display.float_format = '{:.2f}'.format
-pd.set_option('display.max_columns', None)
-pd.set_option('display.max_colwidth', None)
-pd.set_option('display.max_rows', None)
-warnings.filterwarnings("ignore")
+from pandas.tseries.offsets import BDay
+
 
 class StockNewsDashboard:
     def __init__(self):
         st.set_page_config(layout="wide",page_title="Live News Impact")
         self.CREDENTIALS = {"news_impact": "news_ib"}
-        self.SYMBOTRON_CREDENTIALS = {"symbotron": "symbotron"}
-        # self.MONGODB_URI = "mongodb+srv://prachi:Akash5555@stockgpt.fryqpbi.mongodb.net/"
         self.MONGODB_URI = st.secrets["mongodb"]["uri"]
         self.db = MongoClient(self.MONGODB_URI)["CAG_CHATBOT"]
-        self.start_time = dt_time(9, 0)  
-        self.end_time = dt_time(15, 45)
+        self.collection = self.db['NewsImpactDashboard']
+        self.df = pd.DataFrame()
 
     def login_block(self):
         if "authenticated" not in st.session_state:
@@ -46,78 +37,47 @@ class StockNewsDashboard:
                 st.error("❌ Incorrect username or password")
         return False
 
-    def fetch_bse_news(self):
-
-        collection_bse_news = self.db["ProcessedNews"]
-
-        today = datetime.today().date()
-        yesterday = today - timedelta(days=1)
-        dates = [today, yesterday]
-        query = {
-            "$or": [
-                {"dt_tm": {"$regex": f"^{d}"}} for d in dates
-            ]
-        }
-        docs = list(collection_bse_news.find(query))
-
-        def flatten_doc(doc):
-            symbolmap = doc.pop("symbolmap", {})
-            for key, value in symbolmap.items():
-                doc[key] = value
-            doc["_id"] = str(doc["_id"])
-            return doc
-
-        if docs:
-            flat_docs = [flatten_doc(doc) for doc in docs]
-            df_bse = pd.DataFrame(flat_docs)
-            if not df_bse.empty:
-                df_bse = df_bse.rename(columns={
-                    "NSE": "stock",
-                    "pdf_link_live": "news link",
-                    "shortsummary": "short summary",
-                    "impactscore": "impact score"
-                })
-                expected_cols = ['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']
-                df_bse = df_bse[[col for col in expected_cols if col in df_bse.columns]]
-                return df_bse
-        return pd.DataFrame()
-
-    def fetch_livesquack_news(self):
-        collection_live_squack = self.db["news_livesquack"]
-
-        today = datetime.today().date()
-        yesterday = today - timedelta(days=1)
-        dates = [today, yesterday]
-        query = {
-            "$or": [
-                {"dt_tm": {"$regex": f"^{d}"}} for d in dates
-            ]
-        }
-        docs_livesquack = list(collection_live_squack.find(query))
-        df_livesquack = pd.DataFrame(docs_livesquack)
-        df_livesquack = df_livesquack.rename(columns={"nse_symbol": "stock"})
-        df_livesquack['news link'] = ""
-        df_livesquack = df_livesquack[['stock', 'news link', 'impact', 'impact score', 'sentiment', 'short summary', 'dt_tm']]
-        return df_livesquack
-
-    def fetch_yahoo_data(self, tickers):
-        data = yf.download(
-            tickers=[f"{s}.NS" for s in tickers],
-            period="2d",
-            interval="1d",
-            auto_adjust=True,
-            progress=False
+    def filter_data(self):
+        df = pd.DataFrame()
+        full_day = st.checkbox("Include full day news")
+        last_working_day = (datetime.now() - BDay(1)).replace(
+            hour=0 if full_day else 15,
+            minute=0 if full_day else 30,
+            second=1 if full_day else 0,
+            microsecond=0
         )
-        data = data.unstack(level=0).unstack(level=0).reset_index()
-        data = data.sort_values(['Ticker', 'Date'])
-        data['pct_change'] = data.groupby('Ticker')['Close'].pct_change() * 100
-        latest = data.groupby('Ticker').tail(1).reset_index(drop=True)
-        latest['stock'] = latest['Ticker'].str.replace('.NS', '')
-        final_df = latest[['stock', 'Close', 'pct_change']]
-        final_df = final_df[(final_df['pct_change'] < -3) | (final_df['pct_change'] > 3)]
-        return final_df
+        df = pd.DataFrame(list(self.collection.find({
+            "dt_tm": {
+                "$gte": last_working_day,
+                "$lte": datetime.now()
+            },
+            "duplicate": False,
+            "stock": { "$ne": None },
+            "$nor": [
+                {
+                    "$and": [
+                        { "impact score": { "$ne": None, "$lte": 4 } },
+                        { "sentiment": { "$ne": None, "$eq": "Neutral" } }
+                    ]
+                }
+            ],
+            "$or": [
+                { "pct_change": { "$lte": -3 } },
+                { "pct_change": { "$gte": 3 } },
+                { "pct_change": "Post Market News" }
+            ],
+            "short summary": { "$ne": None }
+        })))
+        if df.empty:
+            return df
+        
+        df['highlight'] = False
+        df.loc[(((df['sentiment'] == 'Positive') & (pd.to_numeric(df['pct_change'], errors='coerce') <= -3)) | ((df['sentiment'] == 'Negative') & (pd.to_numeric(df['pct_change'], errors='coerce') >= 3))), ['sentiment', 'impact score', 'highlight']] = ['Neutral', 4, True]
+        return df
 
-    def row_color(self, pct, sentiment):
+    def row_color(self, highlight, sentiment):
+        if highlight:
+            return 'overwrite'
         if isinstance(sentiment, str):
             sentiment = sentiment.lower()
         if sentiment == 'positive':
@@ -130,7 +90,7 @@ class StockNewsDashboard:
     def generate_html_table(self, final_df):
         rows = []
         for _, row in final_df.iterrows():
-            pct_class = self.row_color(row['pct_change'], row['sentiment'])
+            pct_class = self.row_color(row['highlight'], row['sentiment'])
             try:
                 pct_value = float(row['pct_change'])
                 pct_str = f"{pct_value:+.2f}%"
@@ -143,14 +103,17 @@ class StockNewsDashboard:
             else:
                 news_link_html = ''
 
+            tr_class = ' class="overwrite"' if pct_class == 'overwrite' else ''
+            other_class = f' class="{pct_class}"'if tr_class == '' else ''
+
             rows.append(f"""
-            <tr>
+            <tr {tr_class}>
                 <td>{row['stock']}</td>
                 <td>{news_link_html}</td>
-                <td class="{pct_class}">{pct_str}</td>
+                <td {other_class}>{pct_str}</td>
                 <td>{row['impact']}</td>
                 <td><span class="impact-score">{row['impact score']}</span></td>
-                <td class="{pct_class}">{row['sentiment']}</td>
+                <td {other_class}>{row['sentiment']}</td>
                 <td class="summary">{row['short summary']}</td>
                 <td>{row['dt_tm']}</td>
             </tr>
@@ -158,7 +121,7 @@ class StockNewsDashboard:
         return '\n'.join(rows)
 
     def generate_html(self, html_table):
-        return f"""
+        return  f"""
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -240,6 +203,11 @@ class StockNewsDashboard:
                         color: #666;
                         font-weight: bold;
                     }}
+                    .overwrite {{
+                        color: #666;
+                        font-weight: bold;
+                        background-color: #b3d9ff;
+                    }}
                     .impact-score {{
                         background: #f3f3f3;
                         padding: 4px 10px;
@@ -285,11 +253,11 @@ class StockNewsDashboard:
             <body>
             <div class="container">
                 <h2>Stock News Impact Dashboard</h2>
-            
+
                 <div class="search-bar">
                     <input type="text" id="stock-search" placeholder="Search stock...">
                 </div>
-            
+
                 <div class="table-scroll">
                     <table id="impact-table">
                         <thead>
@@ -310,28 +278,28 @@ class StockNewsDashboard:
                     </table>
                 </div>
             </div>
-            
+
             <script>
             document.addEventListener('DOMContentLoaded', function() {{
                 const table = document.getElementById('impact-table');
                 const searchInput = document.getElementById('stock-search');
-            
+
                 // Live stock name search
                 searchInput.addEventListener('keyup', function() {{
                     const filter = this.value.toLowerCase();
                     const rows = table.querySelectorAll('tbody tr');
-            
+
                     rows.forEach(row => {{
                         const stockCell = row.children[0];
                         const stockText = stockCell.textContent.toLowerCase();
                         row.style.display = stockText.includes(filter) ? '' : 'none';
                     }});
                 }});
-            
+
                 // Sorting
                 let lastSortedCol = null;
                 let lastSortAsc = true;
-            
+
                 function getCellValue(tr, idx) {{
                     const cell = tr.children[idx];
                     if (cell.querySelector('a')) {{
@@ -339,7 +307,7 @@ class StockNewsDashboard:
                     }}
                     return cell.textContent.trim();
                 }}
-            
+
                 function comparer(idx, asc, type) {{
                     return function(a, b) {{
                         let v1 = getCellValue(asc ? a : b, idx);
@@ -357,13 +325,13 @@ class StockNewsDashboard:
                         return v1 > v2 ? 1 : v1 < v2 ? -1 : 0;
                     }}
                 }}
-            
+
                 Array.from(table.querySelectorAll('th')).forEach(function(th, idx) {{
                     th.addEventListener('click', function() {{
                         table.querySelectorAll('th').forEach(header => {{
                             header.classList.remove('sort-asc', 'sort-desc');
                         }});
-            
+
                         let asc = true;
                         if (lastSortedCol === idx) {{
                             asc = !lastSortAsc;
@@ -371,11 +339,11 @@ class StockNewsDashboard:
                         lastSortedCol = idx;
                         lastSortAsc = asc;
                         th.classList.add(asc ? 'sort-asc' : 'sort-desc');
-            
+
                         let type = 'string';
                         if (idx === 2 || idx === 4) type = 'number';
                         if (idx === 7) type = 'date';
-            
+
                         const tbody = table.tBodies[0];
                         Array.from(tbody.querySelectorAll('tr'))
                             .sort(comparer(idx, asc, type))
@@ -384,11 +352,10 @@ class StockNewsDashboard:
                 }});
             }});
             </script>
-            
+
             </body>
             </html>
             """
-
 
     async def run(self):
         if not self.login_block():
@@ -401,18 +368,19 @@ class StockNewsDashboard:
 
         if st.button("Refresh Data"):
             st.session_state['refresh_data'] = True
+            self.df = self.filter_data()
             st.rerun()
 
-        df_bse = self.fetch_bse_news()
-        df_livesquack = self.fetch_livesquack_news()
-        df_merged_all_news = pd.concat([df_livesquack, df_bse], ignore_index=True)
-        final_df = self.fetch_yahoo_data(df_merged_all_news['stock'].unique())
-        final_df = final_df.merge(df_merged_all_news, how='left', on='stock')
-        final_df['dt_tm'] = pd.to_datetime(final_df['dt_tm'], errors='coerce')
-
-        distinct_stock_count = final_df['stock'].nunique()
+        if self.df.empty:
+            self.df = self.filter_data()
+            if self.df.empty:
+                st.warning('No data Found')
+                st.stop()
+        
+        self.df['dt_tm'] = pd.to_datetime(self.df['dt_tm'], errors='coerce')
+        distinct_stock_count = self.df['stock'].nunique()
         time_threshold = datetime.now() - timedelta(minutes=15) + timedelta(hours=5, minutes=30)
-        recent_df = final_df[final_df['dt_tm'] >= time_threshold]
+        recent_df = self.df[self.df['dt_tm'] >= time_threshold]
         recent_stock_count = recent_df['stock'].nunique()
 
         col1, col2 = st.columns(2)
@@ -421,13 +389,13 @@ class StockNewsDashboard:
         with col2:
             st.metric(label="⏱️ Stocks Active in Last 15 Min", value=recent_stock_count)
 
-        html_table = self.generate_html_table(final_df)
+        html_table = self.generate_html_table(self.df)
         full_html_code = self.generate_html(html_table)
         st.components.v1.html(full_html_code, height=800, scrolling=True)
-
         st.session_state['refresh_data'] = False
 
     def main(self):
+
         if platform.system() == "Emscripten":
             asyncio.ensure_future(self.run())
         else:
