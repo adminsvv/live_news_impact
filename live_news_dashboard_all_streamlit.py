@@ -7,7 +7,7 @@ import streamlit as st
 from pandas.tseries.offsets import BDay
 import streamlit.components.v1 as components
 
-st.write(datetime.utc.now())
+st.write(datetime.utcnow())
 
 class StockNewsDashboard:
     def __init__(self):
