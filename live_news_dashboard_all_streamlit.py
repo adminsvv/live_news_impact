@@ -74,7 +74,7 @@ class StockNewsDashboard:
         })))
         if df.empty:
             return df
-        st.write(df)
+       
         df['highlight'] = False
         df.loc[(((df['sentiment'] == 'Positive') & (pd.to_numeric(df['pct_change'], errors='coerce') <= -3)) | ((df['sentiment'] == 'Negative') & (pd.to_numeric(df['pct_change'], errors='coerce') >= 3))), ['sentiment', 'impact score', 'highlight']] = ['Neutral', 4, True]
         return df
