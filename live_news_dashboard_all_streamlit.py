@@ -53,6 +53,7 @@ class StockNewsDashboard:
                 "$gte": last_working_day,
                 "$lte": datetime.now()
             },
+            print(datetime.now())
             "duplicate": False,
             "stock": { "$ne": None },
             "$nor": [
