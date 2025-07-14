@@ -42,7 +42,7 @@ class StockNewsDashboard:
     def filter_data(self):
         df = pd.DataFrame()
         full_day = st.checkbox("Include full day news")
-        now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        now = datetime.now()  + timedelta(hours=5,minutes=30)
         st.write(now)
         last_working_day = (now - BDay(1)).replace(
             hour=0 if full_day else 15,
