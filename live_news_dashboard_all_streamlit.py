@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pymongo import MongoClient
 import streamlit as st
 from pandas.tseries.offsets import BDay
+import streamlit.components.v1 as components
 
 
 class StockNewsDashboard:
