@@ -401,7 +401,7 @@ class StockNewsDashboard:
         
         self.df['dt_tm'] = pd.to_datetime(self.df['dt_tm'], errors='coerce')
         distinct_stock_count = self.df['stock'].nunique()
-        time_threshold  = datetime.now(ZoneInfo("Asia/Kolkata")) - timedelta(minutes=15)
+        time_threshold  = datetime.now() - timedelta(minutes=15) + timedelta(hours=5,minutes=30)
         recent_df = self.df[self.df['dt_tm'] >= time_threshold]
         recent_stock_count = recent_df['stock'].nunique()
 
