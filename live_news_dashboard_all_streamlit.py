@@ -7,6 +7,7 @@ import streamlit as st
 from pandas.tseries.offsets import BDay
 import streamlit.components.v1 as components
 
+st.write(datetime.now())
 
 class StockNewsDashboard:
     def __init__(self):
@@ -53,7 +54,7 @@ class StockNewsDashboard:
                 "$gte": last_working_day,
                 "$lte": datetime.now()
             },
-            print(datetime.now())
+            
             "duplicate": False,
             "stock": { "$ne": None },
             "$nor": [
