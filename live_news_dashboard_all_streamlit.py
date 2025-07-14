@@ -7,7 +7,7 @@ import streamlit as st
 from pandas.tseries.offsets import BDay
 import streamlit.components.v1 as components
 
-st.write(datetime.utcnow())
+
 
 class StockNewsDashboard:
     def __init__(self):
@@ -52,7 +52,7 @@ class StockNewsDashboard:
         df = pd.DataFrame(list(self.collection.find({
             "dt_tm": {
                 "$gte": last_working_day,
-                "$lte": datetime.now()
+                "$lte": datetime.now() +  timedelta(hours=5, minutes=30)
             },
             
             "duplicate": False,
