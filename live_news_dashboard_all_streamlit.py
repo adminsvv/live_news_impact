@@ -1,19 +1,19 @@
 import asyncio
 import platform
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
+from zoneinfo import ZoneInfo
 from pymongo import MongoClient
 import streamlit as st
 from pandas.tseries.offsets import BDay
 import streamlit.components.v1 as components
-
-
 
 class StockNewsDashboard:
     def __init__(self):
         st.set_page_config(layout="wide",page_title="Live News Impact")
         self.CREDENTIALS = {"news_impact": "news_ib"}
         self.MONGODB_URI = st.secrets["mongodb"]["uri"]
+        # self.MONGODB_URI ='mongodb+srv://prachi:Akash5555@stockgpt.fryqpbi.mongodb.net/'
         self.db = MongoClient(self.MONGODB_URI)["CAG_CHATBOT"]
         self.collection = self.db['NewsImpactDashboard']
         self.df = pd.DataFrame()
@@ -42,19 +42,32 @@ class StockNewsDashboard:
     def filter_data(self):
         df = pd.DataFrame()
         full_day = st.checkbox("Include full day news")
-        last_working_day = (datetime.now() - BDay(1)).replace(
+        now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        st.write(now)
+        last_working_day = (now - BDay(1)).replace(
             hour=0 if full_day else 15,
             minute=0 if full_day else 30,
             second=1 if full_day else 0,
             microsecond=0
         )
-        
-        df = pd.DataFrame(list(self.collection.find({
+
+        today = pd.Timestamp(now.date())
+        is_business_day = pd.date_range(today, today, freq=BDay()).size > 0
+        in_market_hours = time(9, 15) <= now.time() <= time(15, 30)
+
+        pct_change_conditions = [
+            { "pct_change": { "$lte": -3 } },
+            { "pct_change": { "$gte": 3 } }
+        ]
+
+        if not (is_business_day and in_market_hours):
+            pct_change_conditions.append({ "pct_change": "Post Market News" })
+
+        query = {
             "dt_tm": {
                 "$gte": last_working_day,
-                "$lte": datetime.now() +  timedelta(hours=5, minutes=30)
+                "$lte": now
             },
-            
             "duplicate": False,
             "stock": { "$ne": None },
             "$nor": [
@@ -65,20 +78,25 @@ class StockNewsDashboard:
                     ]
                 }
             ],
-            "$or": [
-                { "pct_change": { "$lte": -3 } },
-                { "pct_change": { "$gte": 3 } },
-                { "pct_change": "Post Market News" }
-            ],
+            "$or": pct_change_conditions,
             "short summary": { "$ne": None }
-        })))
+        }
+
+        df = pd.DataFrame(list(self.collection.find(query)))
+
         if df.empty:
             return df
-       
-        df['highlight'] = False
-        df.loc[(((df['sentiment'] == 'Positive') & (pd.to_numeric(df['pct_change'], errors='coerce') <= -3)) | ((df['sentiment'] == 'Negative') & (pd.to_numeric(df['pct_change'], errors='coerce') >= 3))), ['sentiment', 'impact score', 'highlight']] = ['Neutral', 4, True]
-        return df
 
+        df['highlight'] = False
+        pct_change_numeric = pd.to_numeric(df['pct_change'], errors='coerce')
+
+        df.loc[
+            ((df['sentiment'] == 'Positive') & (pct_change_numeric <= -3)) |
+            ((df['sentiment'] == 'Negative') & (pct_change_numeric >= 3)),
+            ['sentiment', 'impact score', 'highlight']
+        ] = ['Neutral', 4, True]
+
+        return df
     def row_color(self, highlight, sentiment):
         if highlight:
             return 'overwrite'
@@ -383,7 +401,7 @@ class StockNewsDashboard:
         
         self.df['dt_tm'] = pd.to_datetime(self.df['dt_tm'], errors='coerce')
         distinct_stock_count = self.df['stock'].nunique()
-        time_threshold = datetime.now() - timedelta(minutes=15) + timedelta(hours=5, minutes=30)
+        time_threshold  = datetime.now(ZoneInfo("Asia/Kolkata")) - timedelta(minutes=15)
         recent_df = self.df[self.df['dt_tm'] >= time_threshold]
         recent_stock_count = recent_df['stock'].nunique()
 
