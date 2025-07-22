@@ -90,11 +90,11 @@ class StockNewsDashboard:
         df['highlight'] = False
         pct_change_numeric = pd.to_numeric(df['pct_change'], errors='coerce')
 
-        df.loc[
-            ((df['sentiment'] == 'Positive') & (pct_change_numeric <= -3)) |
-            ((df['sentiment'] == 'Negative') & (pct_change_numeric >= 3)),
-            ['sentiment', 'impact score', 'highlight']
-        ] = ['Neutral', 4, True]
+        # df.loc[
+        #     ((df['sentiment'] == 'Positive') & (pct_change_numeric <= -3)) |
+        #     ((df['sentiment'] == 'Negative') & (pct_change_numeric >= 3)),
+        #     ['sentiment', 'impact score', 'highlight']
+        # ] = ['Neutral', 4, True]
 
         return df
     def row_color(self, highlight, sentiment):
